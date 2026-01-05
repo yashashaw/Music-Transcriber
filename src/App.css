@@ -1,0 +1,91 @@
+/* Reset basic settings */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #213547;
+  background-color: #f9fafb;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* --- Layout Classes --- */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #111827;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* --- Button Styling --- */
+
+/* 1. Base Button (Default is RED / Clear Sheet) */
+button {
+  cursor: pointer;
+  background-color: white;
+  border: 1px solid #fee2e2; /* light red border */
+  color: #dc2626;            /* red text */
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+button:hover {
+  background-color: #fef2f2; /* light red bg on hover */
+}
+
+/* 2. New Class for Export Button (BLUE override) */
+button.export-btn {
+  border-color: #bfdbfe;    /* light blue border */
+  color: #2563eb;           /* blue text */
+}
+
+button.export-btn:hover {
+  background-color: #eff6ff; /* light blue bg on hover */
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.instructions {
+  color: #6b7280;
+  text-align: center;
+  font-size: 0.9rem;
+}
