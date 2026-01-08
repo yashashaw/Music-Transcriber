@@ -1,24 +1,32 @@
-# Logs
-logs
-*.log
+# --- Python / Backend ---
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache and Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment Variables (Protect your API keys!)
+.env
+.env.local
+
+# --- Node / React / Frontend ---
+# Dependencies
+node_modules/
+
+# Production Build Output
+build/
+dist/
+
+# Debug Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# --- System Files ---
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
