@@ -1,3 +1,4 @@
+"""
 import asyncio
 import subprocess
 import os
@@ -98,3 +99,4 @@ async def convert_to_lilypond(notes):
             os.remove(ly_filename)
         if os.path.exists(pdf_filename):
             os.remove(pdf_filename)
+"""

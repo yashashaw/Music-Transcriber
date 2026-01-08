@@ -1,0 +1,29 @@
+// public/audioProcessor.js
+
+class AudioProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 2048; 
+    this.buffer = new Float32Array(this.bufferSize);
+    this.index = 0;
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    if (!input || !input.length) return true;
+    
+    const channelData = input[0];
+
+    for (let i = 0; i < channelData.length; i++) {
+      this.buffer[this.index++] = channelData[i];
+
+      if (this.index >= this.bufferSize) {
+        this.port.postMessage(this.buffer.slice());
+        this.index = 0;
+      }
+    }
+    return true;
+  }
+}
+
+registerProcessor('audio-processor', AudioProcessor);
