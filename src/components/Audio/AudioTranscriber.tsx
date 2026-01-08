@@ -19,7 +19,7 @@ interface ServerResponse {
 const AudioTranscriber: React.FC = () => {
   const [notes, setNotes] = useState<NoteEvent[]>([]);
   const [isListening, setIsListening] = useState<boolean>(false);
-  
+
   // Refs need specific types for WebSocket and AudioContext
   const socketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -50,11 +50,25 @@ const AudioTranscriber: React.FC = () => {
 
     // 2. Initialize Audio Context
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+      // FIX PART 1: Request 44.1kHz from the microphone hardware
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 44100,     // <--- ADD THIS
+          echoCancellation: false,
+          autoGainControl: false,
+          noiseSuppression: false
+        }
+      });
+
       // Handle cross-browser compatibility
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      audioContextRef.current = new AudioContextClass();
+
+      // FIX PART 2: Force the Web Audio API to run at 44.1kHz
+      // This ensures the math in Python (divide by 2) results in 22050Hz
+      audioContextRef.current = new AudioContextClass({
+        sampleRate: 44100      // <--- ADD THIS
+      });
+
       const ctx = audioContextRef.current;
 
       // Ensure context is running (sometimes browsers suspend it)
@@ -81,7 +95,7 @@ const AudioTranscriber: React.FC = () => {
       // Connect graph
       source.connect(processor);
       // Connect to destination to prevent garbage collection (even if we don't hear it)
-      processor.connect(ctx.destination); 
+      processor.connect(ctx.destination);
 
     } catch (err) {
       console.error("Error accessing microphone:", err);
@@ -112,17 +126,17 @@ const AudioTranscriber: React.FC = () => {
   return (
     <div style={{ padding: '20px' }}>
       <h2>Real-time AI Transcription</h2>
-      
+
       <div style={{ marginBottom: '20px' }}>
         {!isListening ? (
-          <button 
+          <button
             onClick={startListening}
             style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}
           >
             Start Mic
           </button>
         ) : (
-          <button 
+          <button
             onClick={stopListening}
             style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer', backgroundColor: '#ffcccc' }}
           >
