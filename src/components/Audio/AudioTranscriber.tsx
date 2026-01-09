@@ -7,6 +7,7 @@ interface NoteEvent {
   midi?: number;
   event?: string;
   value?: number;
+  duration?: number; // <-- Added Duration
 }
 
 const AudioTranscriber: React.FC = () => {
@@ -39,7 +40,6 @@ const AudioTranscriber: React.FC = () => {
         });
 
         // 3. Create Audio Context at 22050Hz (Required by Basic Pitch Model)
-        // This automatically handles resampling if your mic is 48k
         const audioContext = new window.AudioContext({ sampleRate: 22050 });
         audioContextRef.current = audioContext;
 
@@ -98,6 +98,9 @@ const AudioTranscriber: React.FC = () => {
     switch (data.type) {
       case 'note_on':
         if (data.note) {
+          // --- LOGGING ---
+          console.log(`🎵 Note ON: ${data.note}`);
+          
           setActiveNotes(prev => {
              // Avoid duplicate visual keys
              if (!prev.includes(data.note!)) return [...prev, data.note!];
@@ -105,13 +108,20 @@ const AudioTranscriber: React.FC = () => {
           });
         }
         break;
+        
       case 'note_off':
+        // --- LOGGING ---
+        console.log(`🛑 Note OFF: ${data.note} | Duration: ${data.duration?.toFixed(3)}s`);
+        
         setActiveNotes(prev => prev.filter(n => n !== data.note));
         break;
+        
       case 'volume':
         if (data.value !== undefined) setVolume(data.value);
         break;
+        
       case 'silence_reset':
+        console.log("Silence Reset");
         setActiveNotes([]);
         break;
     }
