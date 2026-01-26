@@ -16,7 +16,7 @@ function App() {
   return (
     <div className="container">
       <header className="header">
-        <h1>Drum Transcriber</h1>
+        <h1>Music Transcriber</h1>
         <div className="controls">
           {/* New Record Button placed here */}
           <RecordButton />

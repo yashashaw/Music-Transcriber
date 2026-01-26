@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { RenderedNote, NoteDuration } from '../types';
+import type { RenderedNote } from '../types';
 import { fetchNotes, clearAllNotes } from '../api/api';
+import { quantizeDuration } from '../utils/musicMath';
 
 interface ActiveNoteData {
   startTime: number;
@@ -11,33 +12,17 @@ interface ActiveNoteData {
 interface ScoreState {
   notes: RenderedNote[];          
   activeNotes: Map<number, ActiveNoteData>; 
-  
   bpm: number;                         
   isMetronomeOn: boolean;             
-  
   setBpm: (newBpm: number) => void;   
   clearScore: () => void;
   loadNotesFromBackend: () => Promise<void>;
   toggleMetronome: () => void;
-  
   handleNoteOn: (midi: number, noteName: string) => void;
   handleNoteOff: (midi: number) => void;
   forceRenderTick: () => void; 
 }
 
-// Helper: Convert Seconds -> VexFlow Duration Code
-const quantizeDuration = (seconds: number, bpm: number): NoteDuration => {
-  const secondsPerBeat = 60 / bpm;
-  const numBeats = seconds / secondsPerBeat;
-
-  if (numBeats < 0.25) return '16'; 
-  if (numBeats < 0.75) return '8';
-  if (numBeats < 1.5)  return 'q'; 
-  if (numBeats < 3.0)  return 'h'; 
-  return 'w';                      
-};
-
-// Helper: Convert "C4" -> "c/4"
 const formatToVexKey = (note: string) => {
   if (!note) return 'c/5';
   return `${note.charAt(0).toLowerCase()}/${note.slice(1)}`;
@@ -47,7 +32,7 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
   notes: [],
   activeNotes: new Map(), 
   bpm: 100, 
-  isMetronomeOn: false,                            
+  isMetronomeOn: false,
 
   setBpm: (newBpm) => set({ bpm: newBpm }),
 
@@ -64,7 +49,10 @@ export const useScoreStore = create<ScoreState>((set, get) => ({
     
     if (noteData) {
       const durationSec = (Date.now() / 1000) - noteData.startTime;
+      const beats = durationSec / (60 / bpm); // Calculate beats for the log
       const finalDuration = quantizeDuration(durationSec, bpm);
+    
+      console.log(`SEC: ${durationSec.toFixed(3)} | BPM: ${bpm} | BEATS: ${beats.toFixed(3)} | RESULT: ${finalDuration}`);
       
       const newNote: RenderedNote = {
         id: crypto.randomUUID(),

@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Renderer, Stave, Voice, Formatter } from 'vexflow';
 import { useScoreStore } from '../../store/scoreStore';
 import { convertToVexNotes } from '../../utils/VexMap';
-import type { RenderedNote, NoteDuration } from '../../types';
+import { quantizeDuration, getDurationValue } from '../../utils/musicMath';
+import type { RenderedNote } from '../../types';
 
 const MIN_STAVE_WIDTH = 250;
 const SYSTEM_HEIGHT = 150;
@@ -11,28 +12,6 @@ const START_Y = 20;
 const BEATS_PER_MEASURE = 4;
 const MEASURE_BATCH_SIZE = 4;
 const NOTE_PADDING = 60;
-
-// Helper: How much "space" does a note take in a 4/4 bar?
-const getDurationValue = (duration: string): number => {
-  switch (duration) {
-    case 'w': return 4;
-    case 'h': return 2;
-    case 'q': return 1;
-    case '8': return 0.5;
-    case '16': return 0.25;
-    default: return 0;
-  }
-};
-
-const quantizeDuration = (seconds: number, bpm: number): NoteDuration => {
-  const secondsPerBeat = 60 / bpm;
-  const numBeats = seconds / secondsPerBeat;
-  if (numBeats < 0.25) return '16'; 
-  if (numBeats < 0.75) return '8';
-  if (numBeats < 1.5)  return 'q'; 
-  if (numBeats < 3.0)  return 'h'; 
-  return 'w';                      
-};
 
 const formatToVexKey = (note: string) => {
   if (!note) return 'c/5';
@@ -63,7 +42,6 @@ export const SheetMusic: React.FC = () => {
     const allNotesToRender = [...notes];
     const now = Date.now() / 1000;
 
-    // Inject temporary "Red" notes
     activeNotes.forEach((data) => {
       const currentDurationSec = now - data.startTime;
       const liveDuration = quantizeDuration(currentDurationSec, bpm);

@@ -1,5 +1,5 @@
 // Standard VexFlow notation codes
-export type NoteDuration = 'w' | 'h' | 'q' | '8' | '16'; 
+export type NoteDuration = 'w' | 'hd' | 'h' | 'qd' | 'q' | 'qr' | '8' | '8r' | '16';
 
 export interface RenderedNote {
   id: string;

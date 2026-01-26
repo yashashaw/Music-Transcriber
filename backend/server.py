@@ -7,13 +7,14 @@ from basic_pitch.inference import Model, ICASSP_2022_MODEL_PATH
 
 # --- CONFIGURATION ---
 SAMPLE_RATE = 22050
-HOP_SIZE = 768          
-WINDOW_LENGTH = 43844   
+HOP_SIZE = 768
+WINDOW_LENGTH = 43844
 
 # --- HYSTERESIS THRESHOLDS ---
-ONSET_THRESHOLD = 0.6   
+ONSET_THRESHOLD = 0.6          # Sensitivity for starting a NEW note from silence
+RETRIGGER_ONSET_THRESHOLD = 0.85 # Higher sensitivity required to re-trigger an EXISTING note
 NOTE_START_THRESHOLD = 0.5
-NOTE_KEEP_THRESHOLD = 0.25 
+NOTE_KEEP_THRESHOLD = 0.25
 MIN_VOLUME = 0.02
 
 # --- COOLDOWN ---
@@ -60,6 +61,7 @@ async def audio_handler(websocket):
             volume = float(np.sqrt(np.mean(new_data**2)))
             await websocket.send(json.dumps({"type": "volume", "value": volume}))
             
+            # --- SILENCE HANDLING ---
             if volume < MIN_VOLUME:
                 if active_notes:
                     now = time.time()
@@ -85,25 +87,20 @@ async def audio_handler(websocket):
             current_notes_max = np.max(note_probs[0, -focus:, :], axis=0)
             current_onsets_max = np.max(onset_probs[0, -focus:, :], axis=0)
 
-            # --- UPDATED SUPPRESSION LOGIC ---
-            # We iterate High -> Low.
+            # --- SUPPRESSION LOGIC (Iterate High -> Low) ---
             for i in range(87, 24, -1): 
                 prob = current_notes_max[i]
                 if prob < 0.1: continue 
 
-                # CHECK 1: AM I AN OVERTONE? (The "B5 Ghost" Fix)
-                # If the octave BELOW me (i-12) is significantly stronger, 
-                # then I (the high note) am just a harmonic shadow. Kill me.
+                # CHECK 1: AM I AN OVERTONE?
                 idx_below = i - 12
                 if idx_below >= 0:
                     prob_below = current_notes_max[idx_below]
-                    # If Low Note is strong (0.5+) AND Low Note is stronger than me
                     if prob_below > 0.5 and prob < prob_below:
                         current_notes_max[i] = 0.0
-                        continue # Stop processing this note, it's dead.
+                        continue
 
-                # CHECK 2: AM I CAUSING GHOSTS? (The "G2 Ghost" Fix)
-                # If I am the strong note, kill the weak sub-harmonics below me.
+                # CHECK 2: AM I CAUSING GHOSTS?
                 if prob > 0.5: 
                     for offset in [12, 19]: 
                         low_idx = i - offset
@@ -121,35 +118,62 @@ async def audio_handler(websocket):
                 prob_note = current_notes_max[i]
                 prob_onset = current_onsets_max[i]
                 
-                # Standard Hysteresis...
-                start_thresh = NOTE_START_THRESHOLD
-                onset_thresh = ONSET_THRESHOLD
-                
+                # Standard Hysteresis
                 is_active = midi_num in active_notes
-                thresh = NOTE_KEEP_THRESHOLD if is_active else start_thresh
+                thresh = NOTE_KEEP_THRESHOLD if is_active else NOTE_START_THRESHOLD
                 
                 is_sustaining = prob_note > thresh
-                is_attack = prob_onset > onset_thresh
+
+                # Differentiate between starting a new note and re-triggering an old one
+                is_standard_attack = prob_onset > ONSET_THRESHOLD
+                is_retrigger_attack = prob_onset > RETRIGGER_ONSET_THRESHOLD
 
                 if is_sustaining:
                     detected_this_frame.add(midi_num)
                     
                     if is_active:
-                        if is_attack and (now - active_notes[midi_num]) > RETRIGGER_COOLDOWN:
+                        # --- RETRIGGER LOGIC (Fixed for E4 Issue) ---
+                        # Use stricter threshold and ensure cooldown
+                        if is_retrigger_attack and (now - active_notes[midi_num]) > RETRIGGER_COOLDOWN:
                             old_start = active_notes[midi_num]
-                            recorded_song.append({"note": midi_to_note_name(midi_num), "midi": midi_num, "start_time": round(old_start - session_start_time, 3), "duration": round(now - old_start, 3)})
+                            duration = now - old_start
+                            rel_start = old_start - session_start_time
+
+                            note_data = {
+                                "note": midi_to_note_name(midi_num), 
+                                "midi": midi_num, 
+                                "start_time": round(rel_start, 3), 
+                                "duration": round(duration, 3)
+                            }
+                            
+                            # 1. Archive the old note
+                            recorded_song.append(note_data)
+                            
+                            # 2. Send Note OFF for the previous instance (Crucial Fix)
+                            await websocket.send(json.dumps({"type": "note_off", **note_data}))
+
+                            # 3. Start the new note instance
                             active_notes[midi_num] = now
                             await websocket.send(json.dumps({
-                                "type": "note_on", "note": midi_to_note_name(midi_num), "midi": midi_num,
-                                "event": "re_trigger", "start_time": round(now - session_start_time, 3)
+                                "type": "note_on", 
+                                "note": midi_to_note_name(midi_num), 
+                                "midi": midi_num,
+                                "event": "re_trigger", 
+                                "start_time": round(now - session_start_time, 3)
                             }))
                     else:
-                        if session_start_time is None: session_start_time = now
-                        active_notes[midi_num] = now
-                        await websocket.send(json.dumps({
-                            "type": "note_on", "note": midi_to_note_name(midi_num), "midi": midi_num,
-                            "event": "new_attack", "start_time": round(now - session_start_time, 3)
-                        }))
+                        # --- NEW NOTE LOGIC (Fixed for G4 Issue) ---
+                        # Only start if it meets the standard threshold (not retrigger logic)
+                        if is_standard_attack:
+                            if session_start_time is None: session_start_time = now
+                            active_notes[midi_num] = now
+                            await websocket.send(json.dumps({
+                                "type": "note_on", 
+                                "note": midi_to_note_name(midi_num), 
+                                "midi": midi_num,
+                                "event": "new_attack", 
+                                "start_time": round(now - session_start_time, 3)
+                            }))
 
             # --- CLEANUP ---
             for midi_num in list(active_notes.keys()):
