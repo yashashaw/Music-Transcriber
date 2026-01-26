@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useScoreStore } from '../../store/scoreStore';
 
-// Define the shape of data coming back from Python
 interface NoteEvent {
   type: 'note_on' | 'note_off' | 're_trigger' | 'volume' | 'silence_reset';
   note?: string;
@@ -13,8 +13,8 @@ interface NoteEvent {
 
 export const RecordButton: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
+  const { handleNoteOn, handleNoteOff } = useScoreStore(); 
 
-  // Refs for persistent connections
   const socketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -38,8 +38,6 @@ export const RecordButton: React.FC = () => {
 
         const audioContext = new window.AudioContext({ sampleRate: 22050 });
         audioContextRef.current = audioContext;
-
-        // Ensure this path matches where your file is located in the public folder
         await audioContext.audioWorklet.addModule('/audioProcessor.js');
 
         const source = audioContext.createMediaStreamSource(stream);
@@ -90,24 +88,16 @@ export const RecordButton: React.FC = () => {
   };
 
   const handleServerEvent = (data: NoteEvent) => {
-    switch (data.type) {
-      case 'note_on':
-        if (data.note) {
-          console.log(`🎵 Note ON: ${data.note} | Start: ${data.start_time?.toFixed(3)}s`);
-        }
-        break;
-        
-      case 'note_off':
+    if (data.type === 'note_on' && data.midi !== undefined && data.note) {
+        console.log(`🎵 Note ON: ${data.note} | Start: ${data.start_time?.toFixed(3)}s`);
+        handleNoteOn(data.midi, data.note);
+    }
+    else if (data.type === 'note_off' && data.midi !== undefined) {
         console.log(`🛑 Note OFF: ${data.note} | Start: ${data.start_time?.toFixed(3)}s | Duration: ${data.duration?.toFixed(3)}s`);
-        break;
-        
-      case 'volume':
-        // Volume logic removed from UI, but kept here if you need to debug raw volume levels
-        break;
-        
-      case 'silence_reset':
+        handleNoteOff(data.midi);
+    }
+    else if (data.type === 'silence_reset') {
         console.log("Silence Reset");
-        break;
     }
   };
 
