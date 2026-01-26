@@ -1,5 +1,4 @@
 import { SheetMusic } from './components/Canvas/SheetMusic';
-import { useTranscriber } from './hooks/useTranscriber';
 import { useScoreStore } from './store/scoreStore';
 import './App.css';
 import { exportToPDF } from './utils/exportPDF';
@@ -9,7 +8,6 @@ import { useMetronome } from './hooks/useMetronome';
 
 function App() {
   // Activate the Logic Engine (Keyboard listeners)
-  useTranscriber();
   useMetronome();
 
   // Get the clear function

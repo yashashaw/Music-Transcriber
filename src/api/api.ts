@@ -8,8 +8,8 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  
 });
-
 export interface NotePayload {
   id: string;
   keys: string[]; 
