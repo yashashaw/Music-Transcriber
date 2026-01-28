@@ -23,9 +23,19 @@ interface ScoreState {
   forceRenderTick: () => void; 
 }
 
-const formatToVexKey = (note: string) => {
+export const formatToVexKey = (note: string) => {
   if (!note) return 'c/5';
-  return `${note.charAt(0).toLowerCase()}/${note.slice(1)}`;
+  
+  // 1. Match the note parts
+  const match = note.match(/^([a-gA-G][#b]*|rest)([0-9])$/);
+  
+  if (!match) return 'c/5';
+
+  // 2. match[1] is the pitch (e.g., "F#"), match[2] is the octave (e.g., "4")
+  const pitch = match[1].toLowerCase();
+  const octave = match[2];
+
+  return `${pitch}/${octave}`; // Returns "f#/4"
 };
 
 export const useScoreStore = create<ScoreState>((set, get) => ({
