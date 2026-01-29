@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useScoreStore } from '../../store/scoreStore';
 
 interface NoteEvent {
@@ -13,11 +13,50 @@ interface NoteEvent {
 
 export const RecordButton: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const { handleNoteOn, handleNoteOff } = useScoreStore(); 
+  
+  // Import saveRecording from the store
+  const { handleNoteOn, handleNoteOff, saveRecording } = useScoreStore(); 
 
   const socketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+
+  // --- CHANGED: Wrapped in useCallback to fix dependency warning ---
+  const stopAudio = useCallback(() => {
+    // 1. Clean up Audio Context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    
+    // 2. Clean up WebSocket
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+
+    setIsRecording(false);
+
+    // 3. Trigger Batch Save
+    // We wait a tiny bit to ensure the last note_off events are processed
+    setTimeout(() => {
+        saveRecording();
+    }, 200);
+  }, [saveRecording]); 
+
+  const handleServerEvent = (data: NoteEvent) => {
+    if (data.type === 'note_on' && data.midi !== undefined && data.note) {
+        console.log(`🎵 Note ON: ${data.note} | Start: ${data.start_time?.toFixed(3)}s`);
+        handleNoteOn(data.midi, data.note);
+    }
+    else if (data.type === 'note_off' && data.midi !== undefined) {
+        console.log(`🛑 Note OFF: ${data.note} | Start: ${data.start_time?.toFixed(3)}s | Duration: ${data.duration?.toFixed(3)}s`);
+        handleNoteOff(data.midi);
+    }
+    else if (data.type === 'silence_reset') {
+        console.log("Silence Reset");
+    }
+  };
 
   const startStreaming = async () => {
     socketRef.current = new WebSocket('ws://localhost:8000');
@@ -55,7 +94,11 @@ export const RecordButton: React.FC = () => {
 
       } catch (err) {
         console.error("Audio setup failed:", err);
-        socketRef.current?.close();
+        // Safely close if setup fails
+        if (socketRef.current) {
+            socketRef.current.close();
+            socketRef.current = null;
+        }
         setIsRecording(false);
       }
     };
@@ -70,40 +113,24 @@ export const RecordButton: React.FC = () => {
     };
 
     socketRef.current.onclose = () => {
+      // If the socket closes (server dies or we stopped it), ensure UI updates
       setIsRecording(false);
-      stopAudio();
+      // We check if it's already null to avoid recursion loops with stopAudio
+      if (audioContextRef.current) { 
+        stopAudio(); 
+      }
     };
   };
 
-  const stopAudio = () => {
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
-    }
-    setIsRecording(false);
-  };
-
-  const handleServerEvent = (data: NoteEvent) => {
-    if (data.type === 'note_on' && data.midi !== undefined && data.note) {
-        console.log(`🎵 Note ON: ${data.note} | Start: ${data.start_time?.toFixed(3)}s`);
-        handleNoteOn(data.midi, data.note);
-    }
-    else if (data.type === 'note_off' && data.midi !== undefined) {
-        console.log(`🛑 Note OFF: ${data.note} | Start: ${data.start_time?.toFixed(3)}s | Duration: ${data.duration?.toFixed(3)}s`);
-        handleNoteOff(data.midi);
-    }
-    else if (data.type === 'silence_reset') {
-        console.log("Silence Reset");
-    }
-  };
-
+  // Cleanup on unmount
   useEffect(() => {
-    return () => stopAudio();
-  }, []);
+    return () => {
+        // If the component unmounts while recording, stop everything
+        if (socketRef.current || audioContextRef.current) {
+            stopAudio();
+        }
+    };
+  }, [stopAudio]);
 
   return (
     <button

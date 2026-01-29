@@ -15,7 +15,7 @@ ONSET_THRESHOLD = 0.6          # Sensitivity for starting a NEW note from silenc
 RETRIGGER_ONSET_THRESHOLD = 0.85 # Higher sensitivity required to re-trigger an EXISTING note
 NOTE_START_THRESHOLD = 0.5
 NOTE_KEEP_THRESHOLD = 0.25
-MIN_VOLUME = 0.02
+MIN_VOLUME = 0.001
 
 # --- COOLDOWN ---
 RETRIGGER_COOLDOWN = 0.12

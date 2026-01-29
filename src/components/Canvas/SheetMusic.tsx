@@ -69,6 +69,12 @@ export const SheetMusic: React.FC = () => {
         id: `temp-${data.midi}`,
         keys: [formatToVexKey(data.noteName)],
         duration: liveDuration,
+        
+        // --- ADD THESE TWO LINES TO FIX TYPE ERROR ---
+        rawDuration: currentDurationSec, 
+        startTimeOffset: data.startTime,
+        // ---------------------------------------------
+        
         isRest: false,
         color: "#ff0000"
       });

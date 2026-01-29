@@ -5,6 +5,18 @@ export interface RenderedNote {
   id: string;
   keys: string[];   // e.g. ["c/4", "e/4"]
   duration: NoteDuration;
+  
+  // NEW FIELDS FOR BATCHING & SMART EDITING
+  rawDuration: number;     // The actual performance duration in seconds
+  startTimeOffset: number; // When this note started (relative to recording start)
+  
   isRest: boolean;
-  color?: string;   // "red" for active, "black" for committed
+  color?: string;   
+}
+
+export interface SessionPayload {
+  title: string;
+  bpm: number;
+  notes: RenderedNote[];
+  createdAt: string;
 }
