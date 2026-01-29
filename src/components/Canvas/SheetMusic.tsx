@@ -18,7 +18,7 @@ const NOTE_PADDING = 10; // Reduced padding so we rely on formatter
 const getNoteDuration = (durationString: string): number => {
   const base = durationString.replace(/[rd]/g, '');
   let value = 0;
-  
+
   switch (base) {
     case 'w': value = 4; break;
     case 'h': value = 2; break;
@@ -64,17 +64,17 @@ export const SheetMusic: React.FC = () => {
     activeNotes.forEach((data) => {
       const currentDurationSec = now - data.startTime;
       const liveDuration = quantizeDuration(currentDurationSec, bpm);
-      
+
       allNotesToRender.push({
         id: `temp-${data.midi}`,
         keys: [formatToVexKey(data.noteName)],
         duration: liveDuration,
-        
+
         // --- ADD THESE TWO LINES TO FIX TYPE ERROR ---
-        rawDuration: currentDurationSec, 
+        rawDuration: currentDurationSec,
         startTimeOffset: data.startTime,
         // ---------------------------------------------
-        
+
         isRest: false,
         color: "#ff0000"
       });
@@ -82,7 +82,7 @@ export const SheetMusic: React.FC = () => {
 
     // --- RENDER ---
     rendererRef.current.innerHTML = ''; // Clear previous render
-    
+
     // 1. Calculate Measures (Strict Grouping)
     const measures: RenderedNote[][] = [];
     let currentMeasure: RenderedNote[] = [];
@@ -90,7 +90,7 @@ export const SheetMusic: React.FC = () => {
 
     allNotesToRender.forEach((note) => {
       const val = getNoteDuration(note.duration);
-      
+
       // Safety Check: Use 0.01 epsilon for float comparison errors
       // If adding this note pushes us over 4.01 beats, start a new measure
       if (currentBeats + val > BEATS_PER_MEASURE + 0.01) {
@@ -98,7 +98,7 @@ export const SheetMusic: React.FC = () => {
         currentMeasure = [];
         currentBeats = 0;
       }
-      
+
       currentMeasure.push(note);
       currentBeats += val;
     });
@@ -108,65 +108,83 @@ export const SheetMusic: React.FC = () => {
     // 2. Setup Renderer
     const filledCount = measures.length;
     const totalStaves = Math.ceil(Math.max(filledCount, 1) / MEASURE_BATCH_SIZE) * MEASURE_BATCH_SIZE;
-    
+
     const containerWidth = Math.max(800, scrollContainerRef.current.clientWidth - 40);
     const renderer = new Renderer(rendererRef.current, Renderer.Backends.SVG);
     const context = renderer.getContext();
-    
+
     let x = START_X;
     let y = START_Y;
 
     // 3. Render Loop
+    // 3. Render Loop
     for (let i = 0; i < totalStaves; i++) {
       const measureNotes = measures[i];
-      let measureWidth = MIN_STAVE_WIDTH;
       let voice: Voice | null = null;
       let formatter: Formatter | null = null;
+      let minRequiredWidth = 0;
 
-      // Calculate width requirement based on notes
+      // 1. Prepare Voice & Calculate Note Width
       if (measureNotes && measureNotes.length > 0) {
         const vexNotes = convertToVexNotes(measureNotes);
         voice = new Voice({ numBeats: BEATS_PER_MEASURE, beatValue: 4 });
-        
-        // STRICT MODE: Setting this to true helps debug, but false is safer for live rendering
-        // We set it to false so it doesn't crash, but our Grouping Logic above ensures we don't overflow.
-        voice.setStrict(false); 
+        voice.setStrict(false);
         voice.addTickables(vexNotes);
 
         formatter = new Formatter().joinVoices([voice]);
-        const minRequiredWidth = formatter.preCalculateMinTotalWidth([voice]);
-        measureWidth = Math.max(MIN_STAVE_WIDTH, minRequiredWidth + NOTE_PADDING);
+        minRequiredWidth = formatter.preCalculateMinTotalWidth([voice]);
       }
 
-      // Wrap to new line if needed
-      if (x + measureWidth > containerWidth) {
+      // 2. Check Wrap (Preview)
+      // We do a rough check to see if we need to move to the next line.
+      // This tells us if we will need to add a Clef (because x resets to START_X).
+      const estimatedWidth = Math.max(MIN_STAVE_WIDTH, minRequiredWidth + NOTE_PADDING);
+
+      if (x + estimatedWidth > containerWidth) {
         x = START_X;
         y += SYSTEM_HEIGHT;
       }
 
-      // Draw Stave
-      const stave = new Stave(x, y, measureWidth);
-      if (i === 0 || x === START_X) {
-        stave.addClef("treble"); 
+      // 3. Add Padding for Clef / Time Signature
+      // Now that 'x' is finalized, we know if we are at the start of a line.
+      let modifierPadding = 0;
+
+      // If start of line (or first measure), we will have a Treble Clef (~30px)
+      if (x === START_X || i === 0) modifierPadding += 30;
+
+      // If first measure, we will have a Time Signature (~30px)
+      if (i === 0) modifierPadding += 30;
+
+      // 4. Calculate Final Width
+      // Add the modifier padding to the Note Width so the Stave grows to accommodate both.
+      const finalMeasureWidth = Math.max(
+        MIN_STAVE_WIDTH,
+        minRequiredWidth + modifierPadding + NOTE_PADDING
+      );
+
+      // 5. Draw Stave
+      const stave = new Stave(x, y, finalMeasureWidth);
+
+      if (x === START_X || i === 0) {
+        stave.addClef("treble");
         if (i === 0) stave.addTimeSignature("4/4");
       }
       stave.setContext(context).draw();
 
-      // Format and Draw Voice
+      // 6. Format and Draw Voice
       if (voice && formatter) {
-        // Critical Fix: Calculate available space inside the stave (excluding clefs/keys)
-        // so notes don't hit the right barline.
+        // Now 'availableWidth' will actually be large enough for the notes
         const startX = stave.getNoteStartX();
         const endX = stave.getNoteEndX();
-        const availableWidth = endX - startX - 10; // 10px buffer
+        const availableWidth = endX - startX - 10;
 
         if (availableWidth > 0) {
-            formatter.format([voice], availableWidth);
-            voice.draw(context, stave);
+          formatter.format([voice], availableWidth);
+          voice.draw(context, stave);
         }
       }
 
-      x += measureWidth;
+      x += finalMeasureWidth;
     }
 
     const finalHeight = y + SYSTEM_HEIGHT;
@@ -174,7 +192,7 @@ export const SheetMusic: React.FC = () => {
     renderer.resize(containerWidth, finalHeight);
 
     if (activeNotes.size > 0 || notes.length > 0) {
-        bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
   }, [notes, activeNotes, bpm]);
