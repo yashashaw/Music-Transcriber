@@ -1,48 +1,30 @@
-import { SheetMusic } from './components/Canvas/SheetMusic';
-import { useScoreStore } from './store/scoreStore';
-import './App.css';
-import { exportToPDF } from './utils/exportPDF';
-import { BpmControl } from './components/Controls/BpmControl';
-import { RecordButton } from './components/Controls/RecordButton'; // Import the new button
-import { useMetronome } from './hooks/useMetronome';
+import React from 'react'; // <--- 1. Import React explicitly
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HomePage } from './pages/HomePage';
+import { LoginPage } from './pages/LoginPage';
+import { useAuthStore } from './store/authStore';
+
+// 2. Use React.ReactNode instead of JSX.Element
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+};
 
 function App() {
-  // Activate the Logic Engine (Keyboard listeners)
-  useMetronome();
-
-  // Get the clear function
-  const clearScore = useScoreStore((state) => state.clearScore);
-
   return (
-    <div className="container">
-      <header className="header">
-        <h1>Music Transcriber</h1>
-        <div className="controls">
-          {/* New Record Button placed here */}
-          <RecordButton />
-          
-          <BpmControl />
-          
-          <button 
-            onClick={clearScore}
-            className="px-3 py-1 text-sm text-red-600 border border-red-200 rounded hover:bg-red-50"
-          >
-            Clear Sheet
-          </button>
-          <button
-            onClick={() => exportToPDF()}
-            className="export-btn"
-          >
-            Export PDF
-          </button>
-        </div>
-      </header>
-
-      <main className="main-content">
-        {/* Removed the old AudioTranscriber div */}
-        <SheetMusic />
-      </main>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route 
+          path="/" 
+          element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          } 
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
