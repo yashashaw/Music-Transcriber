@@ -1,4 +1,4 @@
-// api.ts
+// src/api/api.ts
 import axios from 'axios';
 import type { RenderedNote, SessionPayload } from '../types';
 
@@ -11,7 +11,7 @@ const apiClient = axios.create({
   },
 });
 
-// --- INTERCEPTOR FOR TOKEN ---
+// --- INTERCEPTOR ---
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth-token');
   if (token) {
@@ -20,7 +20,7 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// --- TYPES ---\
+// --- TYPES ---
 export interface User {
   user_id: string;
   email: string;
@@ -34,7 +34,7 @@ export interface AuthResponse {
 }
 
 export interface LoginCredentials {
-  email: string; // Changed from username to email to match backend expectations
+  email: string;
   password: string;
 }
 
@@ -86,17 +86,15 @@ class AuthManager {
 
 export const authManager = new AuthManager();
 
-// --- API CALLS ---
+// --- API FUNCTIONS ---
 
 export const login = async (credentials: LoginCredentials) => {
-  // Matches @app.post("/api/auth/login")
   const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
   authManager.setAuth(response.data);
   return response.data;
 };
 
 export const register = async (data: RegisterData) => {
-  // Matches @app.post("/api/auth/register")
   const response = await apiClient.post('/auth/register', data);
   return response.data;
 };
@@ -106,7 +104,6 @@ export const logout = async () => {
     await apiClient.post('/auth/logout');
   } finally {
     authManager.clearAuth();
-    // Force reload/redirect could happen here or in UI
   }
 };
 
@@ -120,17 +117,22 @@ export const saveSession = async (sessionData: SessionPayload) => {
   return response.data;
 };
 
+// --- FETCH NOTES (UPDATED) ---
+export const fetchNotes = async (): Promise<RenderedNote[]> => {
+  try {
+    const response = await apiClient.get<RenderedNote[]>('/notes');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching notes:", error);
+    return [];
+  }
+};
+
 export const fetchPDFExport = async (): Promise<Blob> => {
-    // Assuming backend endpoint is /export or similar
     const response = await apiClient.get('/export', { responseType: 'blob' });
     return response.data;
 };
 
-export const fetchNotes = async (): Promise<RenderedNote[]> => {
-    // This might just be loading a specific session in the new architecture
-    return []; 
-};
-
 export const clearAllNotes = async () => {
-    // No-op if purely local state until save
+    // Optional
 };

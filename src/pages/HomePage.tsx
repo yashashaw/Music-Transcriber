@@ -1,17 +1,42 @@
-// src/pages/HomePage.tsx (Formerly App.tsx)
+// src/pages/HomePage.tsx
+import { useEffect } from 'react';
 import { SheetMusic } from '../components/Canvas/SheetMusic';
 import { useScoreStore } from '../store/scoreStore';
-import '../App.css'; // Keep your styles
+import '../App.css'; 
 import { exportToPDF } from '../utils/exportPDF';
 import { BpmControl } from '../components/Controls/BpmControl';
 import { RecordButton } from '../components/Controls/RecordButton';
 import { useMetronome } from '../hooks/useMetronome';
-import { useAuthStore } from '../store/authStore'; // Import auth store
+import { useAuthStore } from '../store/authStore';
 
 export function HomePage() {
   useMetronome();
-  const clearScore = useScoreStore((state) => state.clearScore);
+  
+  // 1. Get actions from Store
+  const { 
+    clearScore, 
+    saveRecording,        
+    loadNotesFromBackend  
+  } = useScoreStore();
+  
   const { logout, username } = useAuthStore();
+
+  // 2. AUTO-LOAD: Fetch data when logged in
+  useEffect(() => {
+    loadNotesFromBackend();
+  }, [loadNotesFromBackend]);
+
+  // 3. AUTO-SAVE & CLEANUP: Save to DB, Wipe Memory, then Logout
+  const handleLogout = async () => {
+    // A. Save current work to database
+    await saveRecording(); 
+    
+    // B. Wipe local memory (so next user sees blank sheet)
+    clearScore(); 
+    
+    // C. Sign out
+    logout();
+  };
 
   return (
     <div className="container">
@@ -35,8 +60,7 @@ export function HomePage() {
             Export PDF
           </button>
           
-          {/* Logout Button */}
-          <button onClick={logout} className="ml-4 text-sm text-gray-600 underline">
+          <button onClick={handleLogout} className="ml-4 text-sm text-gray-600 underline">
             Logout
           </button>
         </div>

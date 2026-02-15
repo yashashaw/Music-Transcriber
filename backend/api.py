@@ -12,20 +12,13 @@ import uuid
 import json
 from datetime import datetime, timedelta
 
-# --- IMPORTS FOR OTHER MODULES ---
-# Make sure you have these files (lilypond.py, audio.py) in the same folder
-from lilypond import convert_to_lilypond 
-
 # --- CONFIGURATION ---
 DATABASE_FILE = "music_transcriber.db"
-# In production, use a fixed secure key!
 SECRET_KEY = "DEV_SECRET_KEY_123" 
 
 # --- SECURITY UTILS ---
 def hash_password(password: str) -> str:
-    """Securely hash password using PBKDF2 with a random salt."""
     salt = secrets.token_hex(16)
-    # 100,000 iterations of SHA256
     key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
     return f"{salt}:{key.hex()}"
 
@@ -85,7 +78,7 @@ async def lifespan(app: FastAPI):
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
         """)
-        # 3. Sessions Table
+        # 3. Sessions Table (Stores the notes per user)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
@@ -106,7 +99,7 @@ app = FastAPI(lifespan=lifespan)
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Adjust to your React port
+    allow_origins=["http://localhost:5173"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,46 +111,35 @@ security_scheme = HTTPBearer()
 async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(security_scheme)):
     token = creds.credentials
     async with aiosqlite.connect(DATABASE_FILE) as db:
-        cursor = await db.execute(
-            "SELECT user_id, expires_at FROM auth_tokens WHERE token = ?", 
-            (token,)
-        )
+        cursor = await db.execute("SELECT user_id, expires_at FROM auth_tokens WHERE token = ?", (token,))
         row = await cursor.fetchone()
         
         if not row:
             raise HTTPException(status_code=401, detail="Invalid token")
             
         user_id, expires_at_str = row
-        expires_at = datetime.fromisoformat(expires_at_str)
-        
-        if datetime.now() > expires_at:
+        if datetime.now() > datetime.fromisoformat(expires_at_str):
             await db.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
             await db.commit()
             raise HTTPException(status_code=401, detail="Token expired")
             
-        # Get user details
-        cursor = await db.execute(
-            "SELECT user_id, email, name FROM users WHERE user_id = ?", 
-            (user_id,)
-        )
+        cursor = await db.execute("SELECT user_id, email, name FROM users WHERE user_id = ?", (user_id,))
         user = await cursor.fetchone()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
             
         return {"user_id": user[0], "email": user[1], "name": user[2]}
 
-# --- ROUTES ---
+# --- AUTH ROUTES ---
 
 @app.post("/api/auth/register")
 async def register(data: UserRegister):
     async with aiosqlite.connect(DATABASE_FILE) as db:
         try:
-            # Check existing
             cursor = await db.execute("SELECT 1 FROM users WHERE email = ?", (data.email,))
             if await cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Email already registered")
             
-            # Create user
             user_id = str(uuid.uuid4())
             hashed = hash_password(data.password)
             
@@ -167,7 +149,6 @@ async def register(data: UserRegister):
             )
             await db.commit()
             return {"message": "Registration successful"}
-            
         except HTTPException as he:
             raise he
         except Exception as e:
@@ -177,35 +158,22 @@ async def register(data: UserRegister):
 @app.post("/api/auth/login")
 async def login(data: UserLogin):
     async with aiosqlite.connect(DATABASE_FILE) as db:
-        cursor = await db.execute(
-            "SELECT user_id, password_hash, name, email FROM users WHERE email = ?", 
-            (data.email,)
-        )
+        cursor = await db.execute("SELECT user_id, password_hash, name, email FROM users WHERE email = ?", (data.email,))
         row = await cursor.fetchone()
         
         if not row or not verify_password(row[1], data.password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
             
         user_id, _, name, email = row
-        
-        # Generate Token
         token = secrets.token_urlsafe(32)
         expires = (datetime.now() + timedelta(days=7)).isoformat()
         
-        await db.execute(
-            "INSERT INTO auth_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-            (token, user_id, expires)
-        )
+        await db.execute("INSERT INTO auth_tokens (token, user_id, expires_at) VALUES (?, ?, ?)", (token, user_id, expires))
         await db.commit()
         
         return {
             "token": token,
-            "user": {
-                "user_id": user_id,
-                "email": email,
-                "name": name,
-                "subscription_tier": "free"
-            }
+            "user": {"user_id": user_id, "email": email, "name": name, "subscription_tier": "free"}
         }
 
 @app.post("/api/auth/logout")
@@ -219,29 +187,39 @@ async def logout(creds: HTTPAuthorizationCredentials = Depends(security_scheme))
 async def get_me(user = Depends(get_current_user)):
     return user
 
-# --- SESSION ROUTES (Protected) ---
+# --- SESSION ROUTES (SAVE & LOAD) ---
 
 @app.post("/api/sessions")
 async def save_session(data: SessionCreate, user = Depends(get_current_user)):
     async with aiosqlite.connect(DATABASE_FILE) as db:
         session_id = str(uuid.uuid4())
-        # Convert Pydantic models to list of dicts for JSON storage
         notes_dict = [note.dict() for note in data.notes]
         
         await db.execute("""
             INSERT INTO sessions (session_id, user_id, title, bpm, notes_json, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            session_id, 
-            user['user_id'], 
-            data.title, 
-            data.bpm, 
-            json.dumps(notes_dict), 
-            data.createdAt,
-            datetime.now().isoformat()
-        ))
+        """, (session_id, user['user_id'], data.title, data.bpm, json.dumps(notes_dict), data.createdAt, datetime.now().isoformat()))
         await db.commit()
         return {"session_id": session_id, "status": "saved"}
+
+# --- NEW: LOAD LATEST NOTES ---
+@app.get("/api/notes")
+async def get_latest_notes(user = Depends(get_current_user)):
+    """Fetches notes from the most recent session for this specific user."""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT notes_json FROM sessions 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC LIMIT 1
+        """, (user['user_id'],))
+        row = await cursor.fetchone()
+        
+        if not row: return []
+        try:
+            return json.loads(row['notes_json'])
+        except:
+            return []
 
 @app.get("/api/sessions")
 async def list_sessions(user = Depends(get_current_user)):
