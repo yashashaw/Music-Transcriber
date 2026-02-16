@@ -47,7 +47,7 @@ export const LoginPage = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       <div className="p-8 bg-white rounded shadow-md w-96">
         <h2 className="text-2xl font-bold mb-6 text-center">
-          {isRegistering ? 'Create Account' : 'Login to Maestro'}
+          {isRegistering ? 'Create Account' : 'Login to Score AI'}
         </h2>
         
         {error && (

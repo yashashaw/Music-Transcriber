@@ -1,30 +1,29 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware'; // <--- 1. Import Middleware
+import { persist } from 'zustand/middleware';
 import type { RenderedNote } from '../types';
-import { fetchNotes, clearAllNotes, saveSession } from '../api/api'; // Import saveSession
+import { fetchNotes, clearAllNotes, saveSession } from '../api/api';
 import { quantizeDuration } from '../utils/musicMath';
 
 interface ActiveNoteData {
   startTime: number;
-  noteName: string; 
+  noteName: string;
   midi: number;
 }
 
 interface ScoreState {
-  notes: RenderedNote[];          
-  activeNotes: Map<number, ActiveNoteData>; 
-  bpm: number;                         
-  isMetronomeOn: boolean;             
-  
-  setBpm: (newBpm: number) => void;   
+  notes: RenderedNote[];
+  activeNotes: Map<number, ActiveNoteData>;
+  bpm: number;
+  isMetronomeOn: boolean;
+
+  setBpm: (newBpm: number) => void;
   clearScore: () => void;
   loadNotesFromBackend: () => Promise<void>;
   toggleMetronome: () => void;
   handleNoteOn: (midi: number, noteName: string) => void;
   handleNoteOff: (midi: number) => void;
   forceRenderTick: () => void;
-  
-  // NEW ACTION
+
   saveRecording: () => Promise<void>;
 }
 
@@ -39,8 +38,8 @@ export const useScoreStore = create<ScoreState>()(
   persist(
     (set, get) => ({
       notes: [],
-      activeNotes: new Map(), 
-      bpm: 100, 
+      activeNotes: new Map(),
+      bpm: 100,
       isMetronomeOn: false,
 
       setBpm: (newBpm) => set({ bpm: newBpm }),
@@ -55,48 +54,45 @@ export const useScoreStore = create<ScoreState>()(
       handleNoteOff: (midi) => {
         const { activeNotes, notes, bpm } = get();
         const noteData = activeNotes.get(midi);
-        
+
         if (noteData) {
           const durationSec = (Date.now() / 1000) - noteData.startTime;
           const finalDuration = quantizeDuration(durationSec, bpm);
-          
-          // Create the note with RAW data for future editing
+
           const newNote: RenderedNote = {
             id: crypto.randomUUID(),
             keys: [formatToVexKey(noteData.noteName)],
             duration: finalDuration,
-            
-            // --- NEW DATA ---
             rawDuration: durationSec,
-            startTimeOffset: noteData.startTime, // You might want to offset this by session start later
-            // ----------------
-            
+            startTimeOffset: noteData.startTime,
             isRest: false,
             color: 'black'
           };
 
           const newActive = new Map(activeNotes);
           newActive.delete(midi);
-          
-          set({ 
+
+          set({
             activeNotes: newActive,
             notes: [...notes, newNote]
           });
-          // Zustand Persist auto-saves to LocalStorage here!
         }
       },
 
-      // --- NEW: BATCH SAVE ACTION ---
+      // --- FIXED: SAVE ACTION ---
       saveRecording: async () => {
         const { notes, bpm } = get();
-        if (notes.length === 0) return;
+        
+        // REMOVED: if (notes.length === 0) return; 
+        // We MUST allow saving empty notes to persist the "cleared" state.
 
         try {
           console.log("Saving batch to backend...");
           await saveSession({
-            title: `Recording ${new Date().toLocaleString()}`,
+            // Optional: Give it a different title if empty, or keep generic
+            title: notes.length === 0 ? "Empty Session" : `Recording ${new Date().toLocaleString()}`,
             bpm,
-            notes,
+            notes, 
             createdAt: new Date().toISOString()
           });
           console.log("Save successful!");
@@ -119,18 +115,19 @@ export const useScoreStore = create<ScoreState>()(
 
       loadNotesFromBackend: async () => {
         const fetchedNotes = await fetchNotes();
-        if (fetchedNotes && fetchedNotes.length > 0) {
+        // Ensure we load even if it's an empty array, provided the fetch was successful
+        if (fetchedNotes) {
           set({ notes: fetchedNotes });
         }
       },
 
-      toggleMetronome: () => set((state) => ({ 
-        isMetronomeOn: !state.isMetronomeOn 
+      toggleMetronome: () => set((state) => ({
+        isMetronomeOn: !state.isMetronomeOn
       })),
     }),
     {
-      name: 'maestro-backup', // Unique name for LocalStorage key
-      partialize: (state) => ({ notes: state.notes, bpm: state.bpm }), // Only persist notes and settings
+      name: 'maestro-backup',
+      partialize: (state) => ({ notes: state.notes, bpm: state.bpm }),
     }
   )
 );
