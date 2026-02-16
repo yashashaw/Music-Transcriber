@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// 1. FIXED IMPORTS: Changed loginUser/registerUser to login/register
+import './LoginPage.css';
 import { login, register } from '../api/api'; 
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
@@ -44,56 +44,57 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <div className="p-8 bg-white rounded shadow-md w-96">
-        <h2 className="text-2xl font-bold mb-6 text-center">
-          {isRegistering ? 'Create Account' : 'Login to Score AI'}
-        </h2>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <h2>{isRegistering ? 'Create Account' : 'Welcome back'}</h2>
+          <p className="login-subtitle">
+            {isRegistering ? 'Sign up to start transcribing' : 'Sign in to your account'}
+          </p>
+        </div>
         
         {error && (
-          <div className={`mb-4 p-2 text-sm rounded border ${
-             error.includes('created') 
-               ? 'text-green-700 bg-green-100 border-green-200' 
-               : 'text-red-700 bg-red-100 border-red-200'
-          }`}>
+          <div className={`login-alert ${error.includes('created') ? 'login-alert--success' : 'login-alert--error'}`}>
             {error}
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <input
-            type="email" // Changed to email type
-            placeholder="Email Address" // Changed placeholder
-            className="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <button 
-            type="submit" 
-            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors"
-          >
-            {isRegistering ? 'Register' : 'Login'}
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="login-field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button type="submit" className="login-submit">
+            {isRegistering ? 'Create Account' : 'Sign In'}
           </button>
         </form>
         
-        <button 
-          onClick={() => {
-            setIsRegistering(!isRegistering);
-            setError(''); 
-          }}
-          className="mt-4 text-sm text-blue-500 hover:underline w-full text-center"
-        >
-          {isRegistering ? 'Already have an account? Login' : 'Need an account? Register'}
-        </button>
+        <div className="login-footer">
+          <button 
+            onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
+            className="login-toggle"
+          >
+            {isRegistering ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
+        </div>
       </div>
     </div>
   );

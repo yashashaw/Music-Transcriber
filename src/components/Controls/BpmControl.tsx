@@ -15,27 +15,19 @@ export const BpmControl: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1 border border-gray-200 rounded bg-white h-full">
+    <div className="bpm-control">
       <button
         onClick={toggleMetronome}
-        className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-          isMetronomeOn 
-            ? 'bg-red-500 text-white hover:bg-red-600' 
-            : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-        }`}
+        className={`bpm-toggle ${isMetronomeOn ? 'bpm-toggle--active' : ''}`}
         title={isMetronomeOn ? "Stop Metronome" : "Start Metronome"}
       >
         {isMetronomeOn ? '◼' : '▶'}
       </button>
 
-      <div className="flex items-center gap-2">
-        <label 
-          htmlFor="bpm-slider" 
-          className="text-sm font-medium text-gray-700 whitespace-nowrap min-w-[80px]"
-        >
+      <div className="bpm-slider-group">
+        <label htmlFor="bpm-slider" className="bpm-label">
           {bpm} BPM
         </label>
-        
         <input
           id="bpm-slider"
           type="range"
@@ -44,7 +36,7 @@ export const BpmControl: React.FC = () => {
           step="1"
           value={bpm}
           onChange={handleChange}
-          className="cursor-pointer"
+          className="bpm-slider"
         />
       </div>
     </div>

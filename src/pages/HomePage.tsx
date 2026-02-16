@@ -40,10 +40,10 @@ export function HomePage() {
 
   return (
     <div className="container">
-      <header className="header flex justify-between items-center">
+      <header className="header">
         <div>
             <h1>Music Transcriber</h1>
-            <span className="text-sm text-gray-500">Welcome, {username}</span>
+            <span className="header-user">Welcome, {username}</span>
         </div>
         
         <div className="controls">
@@ -52,7 +52,7 @@ export function HomePage() {
           
           <button 
             onClick={clearScore}
-            className="px-3 py-1 text-sm text-red-600 border border-red-200 rounded hover:bg-red-50"
+            className="btn-danger"
           >
             Clear Sheet
           </button>
@@ -60,7 +60,7 @@ export function HomePage() {
             Export PDF
           </button>
           
-          <button onClick={handleLogout} className="ml-4 text-sm text-gray-600 underline">
+          <button onClick={handleLogout} className="btn-ghost">
             Logout
           </button>
         </div>

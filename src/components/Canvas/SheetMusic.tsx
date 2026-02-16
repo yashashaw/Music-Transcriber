@@ -200,8 +200,7 @@ export const SheetMusic: React.FC = () => {
   return (
     <div
       ref={scrollContainerRef}
-      className="p-4 bg-white border rounded shadow-md overflow-y-auto relative"
-      style={{ height: '400px', width: '100%' }}
+      className="sheet-music-container"
     >
       <div ref={rendererRef} />
       <div ref={bottomAnchorRef} style={{ height: 1 }} />
