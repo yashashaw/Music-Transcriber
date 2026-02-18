@@ -199,7 +199,7 @@ async def audio_handler(websocket):
 
 async def main():
     print("Server running on localhost:8000")
-    async with websockets.serve(audio_handler, "localhost", 8000):
+    async with websockets.serve(audio_handler, "0.0.0.0", 8000):
         await asyncio.Future()
 
 if __name__ == "__main__":

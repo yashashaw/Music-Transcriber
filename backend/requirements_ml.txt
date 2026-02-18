@@ -1,0 +1,4 @@
+numpy==1.23.5
+basic-pitch==0.2.3
+websockets==11.0.3
+tensorflow==2.12.0
