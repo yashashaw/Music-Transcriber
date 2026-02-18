@@ -11,6 +11,7 @@ import secrets
 import uuid
 import json
 from datetime import datetime, timedelta
+from lilypond import convert_to_lilypond
 
 # --- CONFIGURATION ---
 DATABASE_FILE = "music_transcriber.db"
@@ -233,6 +234,45 @@ async def list_sessions(user = Depends(get_current_user)):
         """, (user['user_id'],))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+    
+# --- EXPORT PDF ROUTE ---
+@app.get("/api/export")
+async def export_pdf(user = Depends(get_current_user)):
+    """
+    1. Fetches the user's latest session notes.
+    2. Sends them to lilypond.py to generate a PDF.
+    3. Returns the PDF file to the browser.
+    """
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Get the most recent session for this user
+        cursor = await db.execute("""
+            SELECT notes_json FROM sessions 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC LIMIT 1
+        """, (user['user_id'],))
+        row = await cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="No session found to export.")
+            
+        try:
+            # Parse the JSON string from the database back into a Python list/dict
+            notes_data = json.loads(row['notes_json'])
+        except:
+            raise HTTPException(status_code=500, detail="Database error: Corrupt note data.")
+
+    # Generate the PDF using your existing lilypond.py script
+    # The script returns a tuple: (pdf_bytes, error_message)
+    pdf_bytes, error_msg = await convert_to_lilypond(notes_data)
+
+    if error_msg:
+        print(f"LilyPond Export Failed: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+    # Return the raw PDF bytes with the correct MIME type so the browser downloads it
+    return Response(content=pdf_bytes, media_type="application/pdf")
 
 if __name__ == "__main__":
     uvicorn.run("api:app", host="0.0.0.0", port=5000, reload=True)
