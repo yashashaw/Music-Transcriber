@@ -1,5 +1,6 @@
 # api.py
 import uvicorn
+import os
 from fastapi import FastAPI, Response, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -15,7 +16,7 @@ from lilypond import convert_to_lilypond
 
 # --- CONFIGURATION ---
 DATABASE_FILE = "music_transcriber.db"
-SECRET_KEY = "DEV_SECRET_KEY_123" 
+SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY_123") # ### CHANGED: Use Env var for security
 
 # --- SECURITY UTILS ---
 def hash_password(password: str) -> str:
@@ -60,7 +61,6 @@ class SessionCreate(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with aiosqlite.connect(DATABASE_FILE) as db:
-        # 1. Users Table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -70,7 +70,6 @@ async def lifespan(app: FastAPI):
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # 2. Tokens Table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS auth_tokens (
                 token TEXT PRIMARY KEY,
@@ -79,7 +78,6 @@ async def lifespan(app: FastAPI):
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
         """)
-        # 3. Sessions Table (Stores the notes per user)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
@@ -97,10 +95,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# --- CORS ---
+# AWS change
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+origins = [
+    "http://localhost:5173", # Local for testing
+    frontend_url,            # Frontend URL
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], 
+    allow_origins=["*"], # WARNING: Set to ["*"] to allow ALL during initial AWS setup. Change back to 'origins' later for security.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -132,7 +137,6 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(securit
         return {"user_id": user[0], "email": user[1], "name": user[2]}
 
 # --- AUTH ROUTES ---
-
 @app.post("/api/auth/register")
 async def register(data: UserRegister):
     async with aiosqlite.connect(DATABASE_FILE) as db:
@@ -188,8 +192,7 @@ async def logout(creds: HTTPAuthorizationCredentials = Depends(security_scheme))
 async def get_me(user = Depends(get_current_user)):
     return user
 
-# --- SESSION ROUTES (SAVE & LOAD) ---
-
+# --- SESSION ROUTES ---
 @app.post("/api/sessions")
 async def save_session(data: SessionCreate, user = Depends(get_current_user)):
     async with aiosqlite.connect(DATABASE_FILE) as db:
@@ -203,10 +206,8 @@ async def save_session(data: SessionCreate, user = Depends(get_current_user)):
         await db.commit()
         return {"session_id": session_id, "status": "saved"}
 
-# --- NEW: LOAD LATEST NOTES ---
 @app.get("/api/notes")
 async def get_latest_notes(user = Depends(get_current_user)):
-    """Fetches notes from the most recent session for this specific user."""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("""
@@ -234,19 +235,12 @@ async def list_sessions(user = Depends(get_current_user)):
         """, (user['user_id'],))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
-    
-# --- EXPORT PDF ROUTE ---
+
+# --- EXPORT PDF ROUTE (ADDED BACK IN) ---
 @app.get("/api/export")
 async def export_pdf(user = Depends(get_current_user)):
-    """
-    1. Fetches the user's latest session notes.
-    2. Sends them to lilypond.py to generate a PDF.
-    3. Returns the PDF file to the browser.
-    """
     async with aiosqlite.connect(DATABASE_FILE) as db:
         db.row_factory = aiosqlite.Row
-        
-        # Get the most recent session for this user
         cursor = await db.execute("""
             SELECT notes_json FROM sessions 
             WHERE user_id = ? 
@@ -256,23 +250,20 @@ async def export_pdf(user = Depends(get_current_user)):
         
         if not row:
             raise HTTPException(status_code=404, detail="No session found to export.")
-            
         try:
-            # Parse the JSON string from the database back into a Python list/dict
             notes_data = json.loads(row['notes_json'])
         except:
             raise HTTPException(status_code=500, detail="Database error: Corrupt note data.")
 
-    # Generate the PDF using your existing lilypond.py script
-    # The script returns a tuple: (pdf_bytes, error_message)
     pdf_bytes, error_msg = await convert_to_lilypond(notes_data)
 
     if error_msg:
         print(f"LilyPond Export Failed: {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
 
-    # Return the raw PDF bytes with the correct MIME type so the browser downloads it
     return Response(content=pdf_bytes, media_type="application/pdf")
 
 if __name__ == "__main__":
-    uvicorn.run("api:app", host="0.0.0.0", port=5000, reload=True)
+    # ### CHANGED: Configured for AWS (usually port 8000 or 5000, 0.0.0.0 is required)
+    # Disable 'reload' in production to save resources
+    uvicorn.run("api:app", host="0.0.0.0", port=5000, reload=False)
